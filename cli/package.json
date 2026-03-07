@@ -1,0 +1,19 @@
+{
+  "name": "@axion/cli",
+  "version": "0.1.0",
+  "description": "CLI tooling for Axion desktop app development",
+  "bin": {
+    "axion": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

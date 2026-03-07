@@ -1,2 +1,3 @@
 // Axion SDK entry point
-export {};
+export { rpc, RpcClient, RpcError, webViewTransport } from "./rpc-client";
+export type { RpcTransport, RpcClientConfig } from "./rpc-client";

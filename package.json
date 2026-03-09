@@ -1,0 +1,12 @@
+{
+  "name": "axion-monorepo",
+  "private": true,
+  "workspaces": [
+    "sdk",
+    "cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace=cli"
+  }
+}

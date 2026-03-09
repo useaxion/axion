@@ -1,0 +1,17 @@
+{
+  "name": "axion",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for building Axion desktop apps",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Named error codes for the Axion RPC protocol.
 ///
@@ -32,9 +33,13 @@ pub mod error_codes {
 /// - `id` is caller-assigned and echoed back in the response.
 /// - `method` is dot-namespaced: `"<module>.<capability>"`, e.g. `"fs.write"`.
 /// - `params` is a JSON object specific to the method.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct RpcRequest<P = serde_json::Value> {
     /// Caller-assigned request ID. Echoed back unchanged in the response.
+    // `u64` is correct in Rust. TypeScript represents it as `number` because
+    // JSON.parse() always produces `number` and request IDs never exceed
+    // Number.MAX_SAFE_INTEGER in practice.
+    #[ts(type = "number")]
     pub id: u64,
     /// Dot-namespaced method name, e.g. `"fs.write"` or `"storage.get"`.
     pub method: String,
@@ -48,7 +53,7 @@ pub struct RpcRequest<P = serde_json::Value> {
 /// ```json
 /// { "code": -32601, "message": "Method not found: fs.write" }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct RpcErrorPayload {
     /// Numeric error code (see [`error_codes`]).
     pub code: i32,
@@ -80,13 +85,21 @@ impl RpcErrorPayload {
 /// ```json
 /// { "id": 12, "error": { "code": -32601, "message": "Method not found: fs.write" } }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(untagged)]
 pub enum RpcResponse<R = serde_json::Value> {
     /// Successful response — contains the method's return value.
-    Success { id: u64, result: R },
+    Success {
+        #[ts(type = "number")]
+        id: u64,
+        result: R,
+    },
     /// Error response — contains a structured error payload.
-    Error { id: u64, error: RpcErrorPayload },
+    Error {
+        #[ts(type = "number")]
+        id: u64,
+        error: RpcErrorPayload,
+    },
 }
 
 impl<R> RpcResponse<R> {
@@ -118,6 +131,27 @@ impl<R> RpcResponse<R> {
     /// Returns `true` if this is an error response.
     pub fn is_err(&self) -> bool {
         !self.is_ok()
+    }
+}
+
+/// Export all RPC types (including transitive dependencies like `JsonValue`)
+/// to `sdk/src/types/` so every generated file lands in the same directory.
+///
+/// Run with `cargo test --lib export_rpc_types` or `cargo test --lib` to
+/// regenerate. The output is committed to the repo — see docs/type-generation.md.
+#[cfg(test)]
+mod type_export {
+    use super::*;
+
+    #[test]
+    fn export_rpc_types() {
+        // `export_all_to` writes the type AND all its transitive dependencies
+        // (e.g. `JsonValue` for `serde_json::Value`) into the same target
+        // directory, keeping all generated files under `sdk/src/types/`.
+        let out = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sdk/src/types");
+        RpcRequest::<serde_json::Value>::export_all_to(out).expect("export RpcRequest");
+        RpcErrorPayload::export_all_to(out).expect("export RpcErrorPayload");
+        RpcResponse::<serde_json::Value>::export_all_to(out).expect("export RpcResponse");
     }
 }
 

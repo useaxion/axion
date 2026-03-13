@@ -1,0 +1,8 @@
+/// Axion core library — public API surface.
+///
+/// Exposing both `ipc` and `rpc` here allows:
+/// - `cargo test --lib` to trigger ts-rs type export to `sdk/src/types/`.
+/// - Integration tests to import types without linking the binary.
+/// - The `rpc::dispatcher::wire_to_bridge` function to resolve `crate::ipc`.
+pub mod ipc;
+pub mod rpc;

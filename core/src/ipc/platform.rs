@@ -16,11 +16,36 @@ pub mod webview2 {
     };
     use webview2_com::WebMessageReceivedEventHandler;
     use windows::{
-        core::HSTRING,
+        core::{HSTRING, PWSTR},
         Win32::{Foundation::E_POINTER, System::WinRT::EventRegistrationToken},
     };
 
     use crate::ipc::{bridge::IpcBridge, error::IpcError};
+
+    /// Newtype wrapper that makes [`ICoreWebView2`] sendable across threads.
+    ///
+    /// # Safety
+    /// `PostWebMessageAsString` is documented by Microsoft as thread-safe —
+    /// it may be called from any thread. The COM apartment must be initialised
+    /// before this wrapper is constructed and must remain alive for as long as
+    /// any instance of the wrapper exists.
+    struct SendableWebView(ICoreWebView2);
+
+    // SAFETY: see struct-level doc comment above.
+    unsafe impl Send for SendableWebView {}
+    unsafe impl Sync for SendableWebView {}
+
+    impl SendableWebView {
+        /// Post a string message into the WebView2 JavaScript context.
+        ///
+        /// Calling via this method ensures Rust 2021 closures capture the
+        /// whole `SendableWebView` (which is `Send + Sync`) rather than the
+        /// inner `ICoreWebView2` field (which is not).
+        fn post_message(&self, message: &HSTRING) -> windows::core::Result<()> {
+            // SAFETY: `PostWebMessageAsString` is thread-safe per WebView2 docs.
+            unsafe { self.0.PostWebMessageAsString(message) }
+        }
+    }
 
     /// Wire an [`IpcBridge`] to a live WebView2 instance.
     ///
@@ -47,11 +72,16 @@ pub mod webview2 {
                 let args: ICoreWebView2WebMessageReceivedEventArgs = args
                     .ok_or_else(|| windows::core::Error::from(E_POINTER))?;
 
-                // SAFETY: `TryGetWebMessageAsString` is documented as safe to
-                // call on the UI thread from within the WebMessageReceived
-                // callback.
-                let raw = unsafe { args.TryGetWebMessageAsString() }?;
-                dispatch_bridge.dispatch(raw.to_string());
+                // SAFETY: `TryGetWebMessageAsString` is safe to call on the
+                // UI thread from within the WebMessageReceived callback.
+                // webview2-com 0.28 uses an out-parameter (*mut PWSTR) rather
+                // than a direct return value.
+                let mut raw = PWSTR::null();
+                unsafe { args.TryGetWebMessageAsString(&mut raw) }?;
+                // SAFETY: `raw` is a valid, null-terminated wide string owned
+                // by the WebView2 event args for the duration of this callback.
+                let msg = unsafe { raw.to_string() }.unwrap_or_default();
+                dispatch_bridge.dispatch(msg);
                 Ok(())
             }));
 
@@ -74,14 +104,14 @@ pub mod webview2 {
     /// `webview` must outlive the returned bridge, and `send_to_js` must be
     /// called from the UI thread (or marshalled to it).
     pub fn new_bridge(webview: ICoreWebView2) -> IpcBridge {
+        // Wrap in SendableWebView so the closure satisfies Send + Sync.
+        // Safety: see SendableWebView above.
+        let sendable = SendableWebView(webview);
         IpcBridge::new(move |message| {
             let hstring = HSTRING::from(message.as_str());
-            // SAFETY: `PostWebMessageAsString` is safe to call on the UI thread.
-            unsafe {
-                webview
-                    .PostWebMessageAsString(&hstring)
-                    .map_err(|e| IpcError::SendFailed(e.to_string()))
-            }
+            sendable
+                .post_message(&hstring)
+                .map_err(|e| IpcError::SendFailed(e.to_string()))
         })
     }
 }

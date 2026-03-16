@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://useaxion.dev/schemas/permissions.schema.json",
+  "title": "Axion Permissions",
+  "description": "Declares the native capabilities an Axion app requires. Every key defaults to false/denied when omitted. Unrecognised keys are rejected at startup to catch typos early.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fs": {
+      "description": "Filesystem access. Omit this key entirely to deny all fs.* RPC calls. Include it with granular flags to enable specific access levels.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appData": {
+          "description": "Read/write access to the app's AppData sandbox: AppData/Local/Axion/<AppName>/. Required by fs.read, fs.write, and fs.delete.",
+          "type": "boolean",
+          "default": false
+        },
+        "userSelected": {
+          "description": "Access to directories explicitly chosen by the user via a system directory picker (fs.pickDirectory). Grants access only to the directory the user selected.",
+          "type": "boolean",
+          "default": false
+        },
+        "absolutePath": {
+          "description": "Read/write access to arbitrary absolute paths on the filesystem. This is the most powerful filesystem permission — only grant if strictly required.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "storage": {
+      "description": "Persistent key-value storage: storage.get, storage.set, storage.remove. Data is scoped to the app's AppData sandbox.",
+      "type": "boolean",
+      "default": false
+    },
+    "notifications": {
+      "description": "Permission to show system desktop notifications via notifications.show.",
+      "type": "boolean",
+      "default": false
+    },
+    "system": {
+      "description": "Read-only access to system information: OS name, platform, version. Exposed via system.info, system.platform, system.version.",
+      "type": "boolean",
+      "default": false
+    },
+    "window": {
+      "description": "Window management: minimize, maximize, close, and set the window title. Exposed via window.minimize, window.maximize, window.close, window.setTitle.",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "examples": [
+    {
+      "fs": { "appData": true, "userSelected": false, "absolutePath": false },
+      "storage": true,
+      "notifications": true,
+      "system": false,
+      "window": true
+    },
+    {
+      "storage": true,
+      "window": true
+    },
+    {
+      "fs": { "appData": true, "userSelected": true, "absolutePath": false },
+      "storage": true,
+      "notifications": true,
+      "system": true,
+      "window": true
+    }
+  ]
+}

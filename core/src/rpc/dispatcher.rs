@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 
 use serde_json::Value;
 
+use crate::permissions::engine::PermissionEngine;
 use crate::rpc::schema::{error_codes, RpcErrorPayload, RpcRequest, RpcResponse};
 
 // ── Handler types ─────────────────────────────────────────────────────────────
@@ -46,16 +47,53 @@ where
 /// Handlers are registered once at startup (by native modules) and then the
 /// dispatcher is shared across threads via `Arc<Dispatcher>` for the lifetime
 /// of the runtime.
+///
+/// # Permission enforcement
+///
+/// When a [`PermissionEngine`] is attached via [`with_engine`](Self::with_engine),
+/// **every** dispatched request is checked against the engine before the handler
+/// is invoked. A denied call returns a [`error_codes::PERMISSION_DENIED`] error
+/// response — the handler is never reached. There is no bypass.
+///
+/// ```rust,ignore
+/// let engine = Arc::new(PermissionEngine::load(Path::new("permissions.json"))?);
+/// let dispatcher = Arc::new(Dispatcher::new().with_engine(engine));
+/// ```
 pub struct Dispatcher {
     handlers: Arc<RwLock<HashMap<String, Handler>>>,
+    /// Optional permission engine. When `Some`, every `dispatch()` call is
+    /// checked before the handler is invoked.
+    engine: Option<Arc<PermissionEngine>>,
 }
 
 impl Dispatcher {
-    /// Create an empty dispatcher with no registered handlers.
+    /// Create an empty dispatcher with no registered handlers and no permission
+    /// engine.
+    ///
+    /// Use [`with_engine`](Self::with_engine) to attach a [`PermissionEngine`]
+    /// before the dispatcher is shared with the IPC bridge.
     pub fn new() -> Self {
         Self {
             handlers: Arc::new(RwLock::new(HashMap::new())),
+            engine: None,
         }
+    }
+
+    /// Attach a [`PermissionEngine`] to this dispatcher.
+    ///
+    /// Once set, every call to [`dispatch`](Self::dispatch) will invoke
+    /// `engine.check(method)` before the handler. A denied call returns
+    /// a [`error_codes::PERMISSION_DENIED`] error response immediately —
+    /// the handler is never invoked.
+    ///
+    /// This is a consuming builder method — call it once during startup:
+    ///
+    /// ```rust,ignore
+    /// let dispatcher = Dispatcher::new().with_engine(engine);
+    /// ```
+    pub fn with_engine(mut self, engine: Arc<PermissionEngine>) -> Self {
+        self.engine = Some(engine);
+        self
     }
 
     /// Register an async handler for `method`.
@@ -84,6 +122,19 @@ impl Dispatcher {
     pub async fn dispatch(&self, request: RpcRequest) -> RpcResponse {
         let id = request.id;
         let method = request.method.clone();
+
+        // ── Permission check ──────────────────────────────────────────────────
+        // Run before touching the handler registry. A denied call never reaches
+        // the handler. There is no bypass for any environment.
+        if let Some(engine) = &self.engine {
+            if let Err(denied) = engine.check(&method) {
+                return RpcResponse::error(
+                    id,
+                    error_codes::PERMISSION_DENIED,
+                    denied.message,
+                );
+            }
+        }
 
         let handler = {
             let handlers = self.handlers.read().expect("dispatcher lock poisoned");
@@ -296,6 +347,116 @@ mod tests {
             // Must not leak internal details like the panic message.
             assert!(!error.message.contains("simulated"));
         }
+    }
+
+    // ── Permission enforcement ────────────────────────────────────────────
+
+    fn engine_allowing(method: &str, key: crate::permissions::engine::PermissionKey, permissions: crate::permissions::Permissions) -> Arc<PermissionEngine> {
+        let mut engine = PermissionEngine::new(permissions);
+        engine.require(method, key);
+        Arc::new(engine)
+    }
+
+    #[tokio::test]
+    async fn denied_method_returns_permission_denied_error() {
+        use crate::permissions::engine::PermissionKey;
+        use crate::permissions::Permissions;
+
+        // Engine with storage granted, but fs is not.
+        let mut engine = PermissionEngine::new(Permissions { storage: true, ..Default::default() });
+        engine.require("fs.write", PermissionKey::FsAppData);
+        engine.require("storage.get", PermissionKey::Storage);
+
+        let d = Dispatcher::new().with_engine(Arc::new(engine));
+        d.register("fs.write", make_handler(|_| async { Ok(json!("written")) }));
+
+        let req = RpcRequest { id: 1, method: "fs.write".into(), params: json!(null) };
+        let resp = d.dispatch(req).await;
+
+        assert!(resp.is_err());
+        assert_eq!(resp.id(), 1);
+        if let RpcResponse::Error { error, .. } = resp {
+            assert_eq!(error.code, error_codes::PERMISSION_DENIED);
+            assert!(error.message.contains("fs.appData"),
+                "error message must name the missing permission");
+        }
+    }
+
+    #[tokio::test]
+    async fn granted_method_reaches_handler() {
+        use crate::permissions::engine::PermissionKey;
+        use crate::permissions::Permissions;
+
+        let mut engine = PermissionEngine::new(Permissions { storage: true, ..Default::default() });
+        engine.require("storage.get", PermissionKey::Storage);
+
+        let d = Dispatcher::new().with_engine(Arc::new(engine));
+        d.register("storage.get", make_handler(|_| async { Ok(json!("value")) }));
+
+        let req = RpcRequest { id: 2, method: "storage.get".into(), params: json!(null) };
+        let resp = d.dispatch(req).await;
+
+        assert!(resp.is_ok());
+        assert_eq!(resp, RpcResponse::success(2, json!("value")));
+    }
+
+    #[tokio::test]
+    async fn unregistered_method_returns_permission_denied_before_method_not_found() {
+        use crate::permissions::Permissions;
+
+        // Engine has no method registrations — everything is denied.
+        let engine = PermissionEngine::new(Permissions { window: true, ..Default::default() });
+        let d = Dispatcher::new().with_engine(Arc::new(engine));
+        // No handler registered either.
+
+        let req = RpcRequest { id: 3, method: "window.close".into(), params: json!(null) };
+        let resp = d.dispatch(req).await;
+
+        // Permission check fires first — method not in engine registry.
+        assert!(resp.is_err());
+        if let RpcResponse::Error { error, .. } = resp {
+            assert_eq!(error.code, error_codes::PERMISSION_DENIED);
+        }
+    }
+
+    #[tokio::test]
+    async fn handler_is_never_called_when_permission_denied() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use crate::permissions::engine::PermissionKey;
+        use crate::permissions::Permissions;
+
+        let called = Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+
+        let mut engine = PermissionEngine::new(Permissions::default()); // nothing granted
+        engine.require("fs.read", PermissionKey::FsAppData);
+
+        let d = Dispatcher::new().with_engine(Arc::new(engine));
+        d.register("fs.read", make_handler(move |_| {
+            let called = called_clone.clone();
+            async move {
+                called.store(true, Ordering::SeqCst);
+                Ok(json!(null))
+            }
+        }));
+
+        let req = RpcRequest { id: 4, method: "fs.read".into(), params: json!(null) };
+        d.dispatch(req).await;
+
+        assert!(!called.load(Ordering::SeqCst), "handler must never be called when permission is denied");
+    }
+
+    #[tokio::test]
+    async fn dispatcher_without_engine_allows_all_registered_handlers() {
+        // No engine attached — backward-compatible behaviour, used in tests
+        // and before modules are registered at startup.
+        let d = Dispatcher::new(); // no engine
+        d.register("any.method", make_handler(|_| async { Ok(json!("ok")) }));
+
+        let req = RpcRequest { id: 5, method: "any.method".into(), params: json!(null) };
+        let resp = d.dispatch(req).await;
+
+        assert!(resp.is_ok());
     }
 
     // ── IPC bridge wiring ─────────────────────────────────────────────────────

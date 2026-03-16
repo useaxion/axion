@@ -153,7 +153,7 @@ impl Permissions {
     /// denied.
     pub fn allows(&self, method: &str) -> bool {
         match method.split_once('.') {
-            Some(("fs", _)) => self.fs.as_ref().map_or(false, |f| f.any_enabled()),
+            Some(("fs", _)) => self.fs.as_ref().is_some_and(|f| f.any_enabled()),
             Some(("storage", _)) => self.storage,
             Some(("notifications", _)) => self.notifications,
             Some(("system", _)) => self.system,

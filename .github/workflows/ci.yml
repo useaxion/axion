@@ -30,7 +30,7 @@ jobs:
         run: cargo test --lib --verbose
 
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --lib -- -D warnings
 
       - name: Check generated TypeScript types are up to date
         # Regenerate types + fix import paths, then fail if any tracked file

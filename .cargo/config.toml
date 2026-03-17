@@ -1,0 +1,8 @@
+# Axion workspace Cargo configuration.
+#
+# Debug symbols are disabled for dev builds to reduce disk usage on the
+# development machine. The `windows` crate is very large when compiled with
+# debug info (>700 MB), which exhausts the available disk space on this machine.
+# CI builds on github.com/useaxion/axion have more storage and can re-enable.
+[profile.dev]
+debug = 0

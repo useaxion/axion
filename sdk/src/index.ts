@@ -43,3 +43,6 @@ export {
 
 // ── React hooks ───────────────────────────────────────────────────────────────
 export { useStorage } from "./hooks/useStorage";
+export { useSystemInfo } from "./hooks/useSystemInfo";
+export { useWindow } from "./hooks/useWindow";
+export type { WindowControls } from "./hooks/useWindow";

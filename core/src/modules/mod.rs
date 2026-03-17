@@ -7,3 +7,4 @@ pub mod fs;
 pub mod notifications;
 pub mod storage;
 pub mod system;
+pub mod window;

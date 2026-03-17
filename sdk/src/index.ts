@@ -40,3 +40,6 @@ export {
   close,
   setTitle,
 } from "./modules/window";
+
+// ── React hooks ───────────────────────────────────────────────────────────────
+export { useStorage } from "./hooks/useStorage";

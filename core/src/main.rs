@@ -1,4 +1,5 @@
 mod ipc;
+mod module;
 mod permissions;
 mod rpc;
 

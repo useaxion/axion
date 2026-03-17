@@ -5,5 +5,6 @@
 /// - Integration tests to import types without linking the binary.
 /// - The `rpc::dispatcher::wire_to_bridge` function to resolve `crate::ipc`.
 pub mod ipc;
+pub mod module;
 pub mod permissions;
 pub mod rpc;

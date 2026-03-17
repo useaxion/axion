@@ -6,3 +6,4 @@
 # CI builds on github.com/useaxion/axion have more storage and can re-enable.
 [profile.dev]
 debug = 0
+incremental = false

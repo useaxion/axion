@@ -4,4 +4,5 @@
 /// The `build_registry` function creates a fully configured [`crate::module::ModuleRegistry`]
 /// containing all five built-in modules for use in the main startup sequence.
 pub mod fs;
+pub mod notifications;
 pub mod storage;

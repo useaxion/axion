@@ -3,7 +3,34 @@
   "version": "0.1.0",
   "description": "TypeScript SDK for building Axion desktop apps",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./fs": {
+      "import": "./dist/modules/fs.js",
+      "types": "./dist/modules/fs.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/modules/storage.js",
+      "types": "./dist/modules/storage.d.ts"
+    },
+    "./notifications": {
+      "import": "./dist/modules/notifications.js",
+      "types": "./dist/modules/notifications.d.ts"
+    },
+    "./system": {
+      "import": "./dist/modules/system.js",
+      "types": "./dist/modules/system.d.ts"
+    },
+    "./window": {
+      "import": "./dist/modules/window.js",
+      "types": "./dist/modules/window.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -11,7 +38,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "jsdom": "^24.0.0",

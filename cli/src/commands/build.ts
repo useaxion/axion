@@ -48,10 +48,8 @@ export async function build(opts: BuildOptions = {}): Promise<void> {
     process.exit(viteExitCode);
   }
 
-  // ── Step 3: cargo build --release ─────────────────────────────────────────
-  console.log("\naxion build — compiling Rust runtime (release)...");
-
-  // Find the Cargo workspace root (search upward from project root).
+  // ── Step 2b: copy Vite output into core/frontend-dist/ for rust-embed ───────
+  console.log("\naxion build — staging frontend assets for embedding...");
   const cargoRoot = findCargoRoot(projectRoot);
   if (!cargoRoot) {
     console.error(
@@ -59,6 +57,20 @@ export async function build(opts: BuildOptions = {}): Promise<void> {
     );
     process.exit(1);
   }
+
+  const viteDist = path.join(projectRoot, "dist");
+  const embedTarget = path.join(cargoRoot, "core", "frontend-dist");
+
+  // Clear stale assets then copy fresh ones.
+  if (fs.existsSync(embedTarget)) {
+    fs.rmSync(embedTarget, { recursive: true });
+  }
+  fs.mkdirSync(embedTarget, { recursive: true });
+  copyDir(viteDist, embedTarget);
+  console.log(`  Staged ${countFiles(embedTarget)} asset(s) → ${embedTarget}`);
+
+  // ── Step 3: cargo build --release ─────────────────────────────────────────
+  console.log("\naxion build — compiling Rust runtime (release)...");
 
   const cargoEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -129,6 +141,33 @@ export async function build(opts: BuildOptions = {}): Promise<void> {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Recursively copy all files from `src` into `dest` (must already exist). */
+function copyDir(src: string, dest: string): void {
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      fs.mkdirSync(destPath, { recursive: true });
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/** Count all files in a directory tree. */
+function countFiles(dir: string): number {
+  let count = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      count += countFiles(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
 
 /**
  * Walk up from `startDir` looking for a directory that contains a Cargo.toml

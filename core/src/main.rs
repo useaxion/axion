@@ -1,3 +1,4 @@
+mod assets;
 mod ipc;
 mod module;
 mod modules;
@@ -14,5 +15,13 @@ fn main() {
         std::process::exit(1);
     });
 
-    println!("Axion runtime starting...");
+    let mode = assets::RuntimeMode::detect();
+    match &mode {
+        assets::RuntimeMode::Dev { url } => {
+            println!("Axion runtime starting... [dev mode → {url}]");
+        }
+        assets::RuntimeMode::Production => {
+            println!("Axion runtime starting... [production — assets embedded]");
+        }
+    }
 }

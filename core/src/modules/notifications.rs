@@ -21,7 +21,7 @@
 /// winrt-notifications = []
 /// ```
 #[allow(dead_code)]
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::module::AxionModule;
 use crate::permissions::engine::{PermissionEngine, PermissionKey};
@@ -172,6 +172,7 @@ fn show_notification_blocking(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::sync::Arc;
 
     fn make_dispatcher_with_notifications(granted: bool) -> crate::rpc::dispatcher::Dispatcher {

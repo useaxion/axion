@@ -40,6 +40,80 @@ jobs:
           node scripts/fix-generated-types.mjs
           git diff --exit-code sdk/src/types/
 
+  smoke-test:
+    name: Build pipeline smoke test
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install monorepo dependencies
+        run: npm ci
+
+      - name: Build CLI
+        run: npm run build --workspace=@axion/cli
+
+      - name: Install smoke-test-app dependencies
+        run: npm install
+        working-directory: examples/smoke-test-app
+
+      - name: Run axion build on smoke-test-app
+        run: node cli/dist/index.js build --cwd examples/smoke-test-app
+        env:
+          AXION_APP_NAME: SmokeTestApp
+          AXION_APP_VERSION: "1.0.0"
+
+      - name: Assert output .exe exists
+        shell: pwsh
+        run: |
+          $exe = "examples/smoke-test-app/dist/SmokeTestApp.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Output binary not found: $exe"
+            exit 1
+          }
+          Write-Host "Output binary: $exe"
+
+      - name: Assert binary size is under 20 MB
+        shell: pwsh
+        run: |
+          $exe = "examples/smoke-test-app/dist/SmokeTestApp.exe"
+          $size = (Get-Item $exe).Length
+          $sizeMb = [math]::Round($size / 1MB, 2)
+          Write-Host "Binary size: $sizeMb MB"
+          if ($size -gt 20MB) {
+            Write-Error "Binary size ($sizeMb MB) exceeds 20 MB limit"
+            exit 1
+          }
+
+      - name: Smoke-test RPC — system.platform returns windows
+        shell: pwsh
+        run: |
+          $exe = "examples/smoke-test-app/dist/SmokeTestApp.exe"
+          $output = & $exe --smoke-test
+          Write-Host "smoke-test output: $output"
+          $json = $output | ConvertFrom-Json
+          if ($json.platform -ne "windows") {
+            Write-Error "Expected platform=windows, got: $($json.platform)"
+            exit 1
+          }
+          Write-Host "smoke-test PASS: system.platform = $($json.platform)"
+
   typescript:
     name: TypeScript
     runs-on: windows-latest

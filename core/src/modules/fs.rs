@@ -267,7 +267,7 @@ impl AxionModule for FsModule {
 
 async fn pick_directory_impl() -> Result<Value, RpcErrorPayload> {
     // Spawn blocking because Win32 COM dialog is synchronous.
-    tokio::task::spawn_blocking(|| pick_directory_blocking())
+    tokio::task::spawn_blocking(pick_directory_blocking)
         .await
         .map_err(|_| RpcErrorPayload::new(error_codes::INTERNAL_ERROR, "pickDirectory task failed"))?
 }

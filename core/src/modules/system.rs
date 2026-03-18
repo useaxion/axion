@@ -58,7 +58,7 @@ impl AxionModule for SystemModule {
 // ── system.info implementation ────────────────────────────────────────────────
 
 async fn system_info_impl() -> Result<Value, RpcErrorPayload> {
-    tokio::task::spawn_blocking(|| system_info_blocking())
+    tokio::task::spawn_blocking(system_info_blocking)
         .await
         .map_err(|_| {
             RpcErrorPayload::new(error_codes::INTERNAL_ERROR, "system.info task failed")

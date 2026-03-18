@@ -33,7 +33,7 @@ export async function build(opts: BuildOptions = {}): Promise<void> {
     process.exit(1);
   }
 
-  const { name, version } = config.axion;
+  const { name, version, description, icon } = config.axion;
   console.log(`  App: ${name} v${version}`);
 
   // ── Step 2: vite build ─────────────────────────────────────────────────────
@@ -77,6 +77,8 @@ export async function build(opts: BuildOptions = {}): Promise<void> {
     AXION_APP_NAME: name,
     AXION_APP_VERSION: version,
     AXION_FRONTEND_DIST: path.join(projectRoot, "dist"),
+    ...(description ? { AXION_APP_DESCRIPTION: description } : {}),
+    ...(icon ? { AXION_APP_ICON: path.resolve(projectRoot, icon) } : {}),
   };
 
   const cargoExitCode = await run(

@@ -59,7 +59,7 @@ impl RuntimeMode {
     /// - In debug builds, default to dev mode even without `AXION_DEV`.
     /// - Otherwise return `Production`.
     pub fn detect() -> Self {
-        let _explicit_dev = std::env::var("AXION_DEV").is_ok();
+        let explicit_dev = std::env::var("AXION_DEV").is_ok();
 
         #[cfg(debug_assertions)]
         let is_dev = true;

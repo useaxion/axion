@@ -194,21 +194,20 @@ mod tests {
 
     #[test]
     fn runtime_mode_dev_url_default() {
-        std::env::remove_var("AXION_DEV_URL");
+        // dev_url() returns whatever URL was stored at construction — no env
+        // var manipulation needed and no risk of races with parallel tests.
         let mode = RuntimeMode::Dev {
-            url: std::env::var("AXION_DEV_URL")
-                .unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            url: "http://localhost:5173".to_string(),
         };
         assert_eq!(mode.dev_url(), Some("http://localhost:5173"));
     }
 
     #[test]
     fn runtime_mode_custom_dev_url() {
-        std::env::set_var("AXION_DEV_URL", "http://localhost:3000");
-        let url = std::env::var("AXION_DEV_URL").unwrap();
-        let mode = RuntimeMode::Dev { url };
+        let mode = RuntimeMode::Dev {
+            url: "http://localhost:3000".to_string(),
+        };
         assert_eq!(mode.dev_url(), Some("http://localhost:3000"));
-        std::env::remove_var("AXION_DEV_URL");
     }
 
     #[test]

@@ -1,0 +1,5 @@
+{
+  "name": "SmokeTestApp",
+  "version": "1.0.0",
+  "description": "Minimal Axion app used to smoke-test the full build pipeline"
+}
